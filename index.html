@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Calcula el costo y el precio de venta de una figura impresa en 3D.">
+<title>Cotizador de Impresión 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@500;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: banco de trabajo — columna de parámetros a la izquierda, "ticket de impresión" fijo a la derecha; en celular el ticket va primero y una barra inferior muestra el precio. */
+:root {
+  --bg: #f3f5f2;
+  --surface: #ffffff;
+  --surface-2: #e9ede8;
+  --line: #d3dad3;
+  --fg: #18201c;
+  --muted: #5b675f;
+  --accent: #0b7a6e;
+  --accent-soft: #d6ece8;
+  --on-accent: #ffffff;
+  --warn: #a5540a;
+  --warn-soft: #f8e7d2;
+  --seg-1: #0b7a6e;
+  --seg-2: #d39b21;
+  --seg-3: #5a6fb8;
+  --seg-4: #b5527d;
+  --seg-5: #7f8c84;
+  --seg-6: #2f9a52;
+  --font-display: "Chivo", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121714; --surface: #1a211d; --surface-2: #222b26; --line: #33403a;
+    --fg: #e6ece8; --muted: #9aa8a0; --accent: #3cc2b0; --accent-soft: #163a35; --on-accent: #06201c;
+    --warn: #f0a450; --warn-soft: #3a2a17;
+    --seg-1: #3cc2b0; --seg-2: #e6b648; --seg-3: #8c9df0; --seg-4: #e382ad; --seg-5: #9aa8a0; --seg-6: #5cc77f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121714; --surface: #1a211d; --surface-2: #222b26; --line: #33403a;
+  --fg: #e6ece8; --muted: #9aa8a0; --accent: #3cc2b0; --accent-soft: #163a35; --on-accent: #06201c;
+  --warn: #f0a450; --warn-soft: #3a2a17;
+  --seg-1: #3cc2b0; --seg-2: #e6b648; --seg-3: #8c9df0; --seg-4: #e382ad; --seg-5: #9aa8a0; --seg-6: #5cc77f;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+}
+.wrap {
+  max-width: 1180px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 96px;
+}
+
+/* Encabezado con líneas de capa */
+header.top {
+  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px;
+  padding-block: 8px 20px; margin-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+  background-image: repeating-linear-gradient(to bottom, transparent 0 5px, var(--surface-2) 5px 6px);
+  background-size: 100% 36px; background-repeat: no-repeat; background-position: bottom;
+}
+h1 {
+  font-family: var(--font-display); font-weight: 800; font-size: clamp(1.6rem, 3.4vw, 2.3rem);
+  letter-spacing: -0.02em; margin: 0; line-height: 1.1; text-wrap: balance;
+}
+.sub { margin: 6px 0 0; color: var(--muted); max-width: 60ch; }
+.top-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 24px; align-items: start; }
+.params { display: grid; gap: 16px; min-width: 0; }
+
+section.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 18px 18px 20px; min-width: 0;
+}
+.card h2 {
+  font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; margin: 0 0 4px;
+  display: flex; align-items: center; gap: 10px;
+}
+.card h2 .step {
+  font-family: var(--font-data); font-size: .75rem; font-weight: 600; color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 4px; padding: 1px 6px;
+}
+.card .hint { color: var(--muted); font-size: .86rem; margin: 0 0 14px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px 14px; }
+.field { display: grid; gap: 4px; min-width: 0; }
+.field label { font-size: .8rem; font-weight: 600; color: var(--muted); letter-spacing: .01em; }
+.field.wide { grid-column: 1 / -1; }
+.inp {
+  display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 7px; background: var(--bg);
+  overflow: hidden;
+}
+.inp:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.inp input, .inp select {
+  flex: 1; min-width: 0; border: 0; background: transparent; color: var(--fg);
+  font: 500 .95rem var(--font-data); padding: 8px 10px; outline: none;
+}
+.inp select { font-family: var(--font-body); }
+.inp .u {
+  display: flex; align-items: center; padding: 0 10px; font: .78rem var(--font-data); color: var(--muted);
+  background: var(--surface-2); border-left: 1px solid var(--line); white-space: nowrap;
+}
+.inp .u.pre { border-left: 0; border-right: 1px solid var(--line); }
+input[type="number"]::-webkit-inner-spin-button { opacity: .5; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font: 600 .8rem var(--font-body); padding: 6px 11px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+}
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.chip:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.toggle { display: flex; align-items: center; gap: 8px; font-size: .88rem; cursor: pointer; }
+.toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+/* Tabla de mayoreo */
+.tiers { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.tiers th { text-align: left; font-size: .75rem; color: var(--muted); font-weight: 600; padding: 4px 6px; }
+.tiers td { padding: 4px 6px; }
+.tiers td .inp input { padding: 6px 8px; }
+
+/* Ticket */
+.ticket {
+  position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  overflow: hidden; min-width: 0;
+}
+.ticket .head { padding: 16px 18px 12px; border-bottom: 1px dashed var(--line); }
+.ticket .lbl { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+.ticket .name { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; margin-top: 2px; overflow-wrap: anywhere; }
+.price-big {
+  font-family: var(--font-display); font-weight: 800; font-size: 2.6rem; letter-spacing: -0.02em; line-height: 1;
+  font-variant-numeric: tabular-nums; margin: 14px 0 2px;
+}
+.price-big small { font-size: 1rem; font-weight: 700; color: var(--muted); margin-left: 4px; }
+.price-note { font-size: .82rem; color: var(--muted); }
+
+.ticket .body { padding: 14px 18px 18px; display: grid; gap: 14px; }
+.bar { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--surface-2); }
+.bar span { display: block; height: 100%; min-width: 0; transition: width .25s ease; }
+.rows { display: grid; gap: 2px; font-size: .88rem; }
+.row { display: grid; grid-template-columns: 12px 1fr auto; gap: 8px; align-items: center; padding: 3px 0; }
+.row .sw { width: 10px; height: 10px; border-radius: 2px; }
+.row .v { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.row.total { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 8px; font-weight: 600; grid-template-columns: 1fr auto; }
+.row.sum { grid-template-columns: 1fr auto; }
+.kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.kpi { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.kpi .k { font-size: .72rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+.kpi .n { font-family: var(--font-data); font-weight: 600; font-size: 1.05rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.alert { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 8px 10px; font-size: .84rem; font-weight: 500; }
+
+.vol { width: 100%; border-collapse: collapse; font-size: .86rem; font-variant-numeric: tabular-nums; }
+.vol th { text-align: right; font-size: .7rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; padding: 4px 4px; }
+.vol th:first-child, .vol td:first-child { text-align: left; }
+.vol td { text-align: right; padding: 5px 4px; border-top: 1px solid var(--line); font-family: var(--font-data); }
+.vol tr.cur td { color: var(--accent); font-weight: 600; }
+.vol-wrap { overflow-x: auto; }
+
+.btn {
+  font: 600 .88rem var(--font-body); border-radius: 8px; padding: 9px 14px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.copied { font-size: .82rem; color: var(--accent); font-weight: 600; align-self: center; }
+textarea#quoteText {
+  width: 100%; min-height: 120px; font: .82rem var(--font-data); padding: 8px; border-radius: 7px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); resize: vertical;
+}
+
+/* Barra inferior en celular */
+.mbar { display: none; }
+@media (max-width: 900px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .ticket { position: static; order: -1; }
+  .mbar {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    justify-content: space-between; align-items: center; gap: 12px;
+    background: var(--surface); border-top: 1px solid var(--line);
+    padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  }
+  .mbar .p { font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+  .mbar .t { font-size: .78rem; color: var(--muted); }
+}
+@media (prefers-reduced-motion: reduce) { .bar span { transition: none; } }
+</style>
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Cotizador de Impresión 3D</h1>
+      <p class="sub">Captura los gramos y el tiempo que te da tu laminador (Cura, PrusaSlicer, Bambu Studio…) y obtén el costo real de la figura y un precio sugerido unitario y de mayoreo.</p>
+    </div>
+    <div class="top-actions">
+      <button class="btn" id="btnReset" type="button">Restaurar valores de ejemplo</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <div class="params">
+
+      <section class="card" aria-labelledby="h-pieza">
+        <h2 id="h-pieza"><span class="step">1</span>La figura</h2>
+        <p class="hint">Datos del laminador para <strong>una</strong> pieza.</p>
+        <div class="grid">
+          <div class="field wide">
+            <label for="nombre">Nombre de la figura</label>
+            <div class="inp"><input id="nombre" type="text" value="Dragón articulado 20 cm"></div>
+          </div>
+          <div class="field">
+            <label for="gramos">Filamento</label>
+            <div class="inp"><input id="gramos" type="number" min="0" step="0.1" value="85"><span class="u">g</span></div>
+          </div>
+          <div class="field">
+            <label for="horas">Tiempo de impresión</label>
+            <div class="inp"><input id="horas" type="number" min="0" step="1" value="6"><span class="u">h</span><input id="minutos" type="number" min="0" max="59" step="1" value="30" aria-label="Minutos"><span class="u">min</span></div>
+          </div>
+          <div class="field">
+            <label for="cantidad">Piezas del pedido</label>
+            <div class="inp"><input id="cantidad" type="number" min="1" step="1" value="1"><span class="u">pzas</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="h-mat">
+        <h2 id="h-mat"><span class="step">2</span>Material y luz</h2>
+        <p class="hint">Elige el material para cargar un precio por kilo de referencia y ajústalo al que tú pagas.</p>
+        <div class="chips" id="materials" role="group" aria-label="Material"></div>
+        <div class="grid" style="margin-top:14px">
+          <div class="field">
+            <label for="precioKg">Precio del rollo</label>
+            <div class="inp"><span class="u pre">$</span><input id="precioKg" type="number" min="0" step="1" value="420"><span class="u">MXN/kg</span></div>
+          </div>
+          <div class="field">
+            <label for="desperdicio">Purga y desperdicio</label>
+            <div class="inp"><input id="desperdicio" type="number" min="0" step="1" value="5"><span class="u">%</span></div>
+          </div>
+          <div class="field">
+            <label for="watts">Consumo de la impresora</label>
+            <div class="inp"><input id="watts" type="number" min="0" step="5" value="150"><span class="u">W</span></div>
+          </div>
+          <div class="field">
+            <label for="kwh">Tarifa de luz</label>
+            <div class="inp"><span class="u pre">$</span><input id="kwh" type="number" min="0" step="0.1" value="3.2"><span class="u">MXN/kWh</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="h-maq">
+        <h2 id="h-maq"><span class="step">3</span>Desgaste y fallas</h2>
+        <p class="hint">Lo que te cuesta cada hora de máquina y las impresiones que salen mal.</p>
+        <div class="grid">
+          <div class="field">
+            <label for="costoImpresora">Costo de la impresora</label>
+            <div class="inp"><span class="u pre">$</span><input id="costoImpresora" type="number" min="0" step="100" value="9000"><span class="u">MXN</span></div>
+          </div>
+          <div class="field">
+            <label for="vidaUtil">Vida útil estimada</label>
+            <div class="inp"><input id="vidaUtil" type="number" min="1" step="100" value="4000"><span class="u">h</span></div>
+          </div>
+          <div class="field">
+            <label for="mantenimiento">Repuestos y mantenimiento</label>
+            <div class="inp"><span class="u pre">$</span><input id="mantenimiento" type="number" min="0" step="0.1" value="1.5"><span class="u">MXN/h</span></div>
+          </div>
+          <div class="field">
+            <label for="fallas">Impresiones fallidas</label>
+            <div class="inp"><input id="fallas" type="number" min="0" step="1" value="8"><span class="u">%</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="h-mo">
+        <h2 id="h-mo"><span class="step">4</span>Mano de obra y acabado</h2>
+        <p class="hint">La preparación del pedido (laminar, nivelar, calibrar) se reparte entre todas las piezas; el acabado es por pieza.</p>
+        <div class="grid">
+          <div class="field">
+            <label for="prep">Preparación del pedido</label>
+            <div class="inp"><input id="prep" type="number" min="0" step="5" value="20"><span class="u">min</span></div>
+          </div>
+          <div class="field">
+            <label for="post">Acabado por pieza</label>
+            <div class="inp"><input id="post" type="number" min="0" step="5" value="25"><span class="u">min</span></div>
+          </div>
+          <div class="field">
+            <label for="costoHora">Tu hora de trabajo</label>
+            <div class="inp"><span class="u pre">$</span><input id="costoHora" type="number" min="0" step="5" value="80"><span class="u">MXN/h</span></div>
+          </div>
+          <div class="field">
+            <label for="extras">Extras por pieza</label>
+            <div class="inp"><span class="u pre">$</span><input id="extras" type="number" min="0" step="1" value="15"><span class="u">MXN</span></div>
+          </div>
+        </div>
+        <p class="hint" style="margin:10px 0 0">Extras: pintura, primer, imanes, base, bolsa o caja.</p>
+      </section>
+
+      <section class="card" aria-labelledby="h-precio">
+        <h2 id="h-precio"><span class="step">5</span>Ganancia y precio de venta</h2>
+        <p class="hint">El margen se calcula sobre el costo. La comisión es la de la plataforma donde vendes (Mercado Libre, terminal, etc.).</p>
+        <div class="grid">
+          <div class="field">
+            <label for="margen">Ganancia</label>
+            <div class="inp"><input id="margen" type="number" min="0" step="5" value="60"><span class="u">%</span></div>
+          </div>
+          <div class="field">
+            <label for="comision">Comisión de venta</label>
+            <div class="inp"><input id="comision" type="number" min="0" max="90" step="0.5" value="0"><span class="u">%</span></div>
+          </div>
+          <div class="field">
+            <label for="redondeo">Redondear a</label>
+            <div class="inp">
+              <select id="redondeo">
+                <option value="0">Sin redondeo</option>
+                <option value="1">$1</option>
+                <option value="5">$5</option>
+                <option value="10" selected>$10</option>
+                <option value="50">$50</option>
+              </select>
+            </div>
+          </div>
+          <div class="field" style="align-content:end">
+            <label class="toggle" for="iva"><input id="iva" type="checkbox"> Agregar IVA (16 %)</label>
+          </div>
+        </div>
+
+        <h3 style="font:700 .9rem var(--font-display); margin:18px 0 6px">Descuentos de mayoreo</h3>
+        <p class="hint" style="margin-bottom:8px">Descuento sobre el precio unitario según las piezas del pedido.</p>
+        <div class="vol-wrap">
+          <table class="tiers" id="tiersTable">
+            <thead><tr><th>Desde</th><th>Descuento</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <aside class="ticket" aria-labelledby="t-title" aria-live="polite">
+      <div class="head">
+        <div class="lbl" id="t-title">Precio sugerido por pieza</div>
+        <div class="name" id="tName"></div>
+        <div class="price-big" id="tPrice">$0<small>MXN</small></div>
+        <div class="price-note" id="tNote"></div>
+      </div>
+      <div class="body">
+        <div>
+          <div class="lbl" style="margin-bottom:6px">Costo por pieza</div>
+          <div class="bar" id="bar" role="img" aria-label="Distribución del costo"></div>
+        </div>
+        <div class="rows" id="rows"></div>
+        <div class="kpis">
+          <div class="kpi"><div class="k">Pedido total</div><div class="n" id="kTotal">$0</div></div>
+          <div class="kpi"><div class="k">Ganancia del pedido</div><div class="n" id="kProfit">$0</div></div>
+          <div class="kpi"><div class="k">Costo por gramo</div><div class="n" id="kGram">$0</div></div>
+          <div class="kpi"><div class="k">Horas de máquina</div><div class="n" id="kHours">0 h</div></div>
+        </div>
+        <div class="alert" id="alert" hidden></div>
+        <div>
+          <div class="lbl" style="margin-bottom:4px">Precio por volumen</div>
+          <div class="vol-wrap"><table class="vol" id="volTable"></table></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="btnCopy" type="button">Copiar cotización</button>
+          <span class="copied" id="copied" hidden>Copiada</span>
+        </div>
+        <textarea id="quoteText" readonly hidden aria-label="Texto de la cotización"></textarea>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="mbar" aria-hidden="true">
+  <div><div class="t">Por pieza</div><div class="p" id="mPrice">$0</div></div>
+  <div style="text-align:right"><div class="t" id="mQtyLbl">Pedido</div><div class="p" id="mTotal">$0</div></div>
+</div>
+
+<script>
+(function () {
+  const STORE_KEY = "cotizador3d.v1";
+  const MATERIALS = [
+    { id: "PLA", kg: 420 }, { id: "PLA+ / Silk", kg: 480 }, { id: "PETG", kg: 450 },
+    { id: "ABS", kg: 430 }, { id: "TPU", kg: 650 }, { id: "Resina", kg: 900 }
+  ];
+  const FIELDS = ["nombre","gramos","horas","minutos","cantidad","precioKg","desperdicio","watts","kwh",
+    "costoImpresora","vidaUtil","mantenimiento","fallas","prep","post","costoHora","extras",
+    "margen","comision","redondeo"];
+  const DEFAULT_TIERS = [{ desde: 1, desc: 0 }, { desde: 5, desc: 8 }, { desde: 10, desc: 12 }, { desde: 25, desc: 18 }];
+  const DEFAULTS = {};
+  const $ = id => document.getElementById(id);
+  FIELDS.forEach(f => DEFAULTS[f] = $(f).value);
+  DEFAULTS.iva = false; DEFAULTS.material = "PLA"; DEFAULTS.tiers = DEFAULT_TIERS;
+
+  let state = { material: "PLA", tiers: DEFAULT_TIERS.map(t => ({ ...t })) };
+
+  const fmt = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmt0 = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  const money = v => fmt.format(isFinite(v) ? v : 0);
+  const num = id => { const v = parseFloat(String($(id).value).replace(",", ".")); return isFinite(v) && v >= 0 ? v : 0; };
+
+  // ── Materiales
+  const chips = $("materials");
+  MATERIALS.forEach(m => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.textContent = m.id; b.dataset.id = m.id;
+    b.addEventListener("click", () => { state.material = m.id; $("precioKg").value = m.kg; paintChips(); calc(); save(); });
+    chips.appendChild(b);
+  });
+  function paintChips() { chips.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", String(c.dataset.id === state.material))); }
+
+  // ── Tabla de mayoreo
+  function renderTiers() {
+    const tb = $("tiersTable").querySelector("tbody"); tb.innerHTML = "";
+    state.tiers.forEach((t, i) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        `<td><div class="inp"><input id="tierDesde${i}" type="number" min="1" step="1" value="${t.desde}" ${i === 0 ? "disabled" : ""}><span class="u">pzas</span></div></td>` +
+        `<td><div class="inp"><input id="tierDesc${i}" type="number" min="0" max="90" step="1" value="${t.desc}"><span class="u">%</span></div></td>`;
+      tb.appendChild(tr);
+      tr.querySelector(`#tierDesde${i}`).addEventListener("input", e => { t.desde = Math.max(1, parseInt(e.target.value) || 1); calc(); save(); });
+      tr.querySelector(`#tierDesc${i}`).addEventListener("input", e => { t.desc = Math.min(90, Math.max(0, parseFloat(e.target.value) || 0)); calc(); save(); });
+    });
+  }
+  const discountFor = q => {
+    let d = 0;
+    [...state.tiers].sort((a, b) => a.desde - b.desde).forEach(t => { if (q >= t.desde) d = t.desc; });
+    return d;
+  };
+
+  // ── Cálculo (por pieza)
+  function compute(qtyOverride) {
+    const qty = Math.max(1, Math.round(qtyOverride ?? num("cantidad")) || 1);
+    const horas = num("horas") + Math.min(59, num("minutos")) / 60;
+    const material = num("gramos") * (1 + num("desperdicio") / 100) / 1000 * num("precioKg");
+    const luz = horas * num("watts") / 1000 * num("kwh");
+    const desgaste = horas * (num("costoImpresora") / Math.max(1, num("vidaUtil")) + num("mantenimiento"));
+    const fallas = (material + luz + desgaste) * num("fallas") / 100;
+    const manoObra = (num("prep") / qty + num("post")) / 60 * num("costoHora");
+    const extras = num("extras");
+    const costo = material + luz + desgaste + fallas + manoObra + extras;
+
+    const comision = Math.min(90, num("comision")) / 100;
+    const iva = $("iva").checked;
+    const round = parseFloat($("redondeo").value) || 0;
+    const desc = discountFor(qty) / 100;
+
+    let base = costo * (1 + num("margen") / 100);           // precio con ganancia
+    base = base * (1 - desc);                                // descuento de mayoreo
+    let precio = comision > 0 ? base / (1 - comision) : base; // para que la comisión no se coma la ganancia
+    if (iva) precio *= 1.16;
+    if (round > 0) precio = Math.ceil(precio / round - 1e-9) * round;
+
+    const neto = (iva ? precio / 1.16 : precio) * (1 - comision); // lo que realmente recibes por pieza
+    const ganancia = neto - costo;
+    return { qty, horas, material, luz, desgaste, fallas, manoObra, extras, costo, precio, neto, ganancia, desc, iva };
+  }
+
+  const SEGMENTS = [
+    ["material", "Filamento", "--seg-1"], ["luz", "Luz", "--seg-2"], ["desgaste", "Desgaste de máquina", "--seg-3"],
+    ["fallas", "Reserva por fallas", "--seg-5"], ["manoObra", "Mano de obra", "--seg-4"], ["extras", "Extras y acabado", "--seg-6"]
+  ];
+
+  function calc() {
+    const r = compute();
+    const name = $("nombre").value.trim() || "Figura sin nombre";
+    $("tName").textContent = name;
+    $("tPrice").innerHTML = `${fmt0.format(r.precio)}<small>MXN</small>`;
+    const notes = [];
+    if (r.desc > 0) notes.push(`incluye ${Math.round(r.desc * 100)} % de mayoreo por ${r.qty} piezas`);
+    if (r.iva) notes.push("IVA incluido");
+    if (num("comision") > 0) notes.push(`cubre ${num("comision")} % de comisión`);
+    $("tNote").textContent = notes.length ? notes.join(" · ") : `Precio para ${r.qty} ${r.qty === 1 ? "pieza" : "piezas"}`;
+
+    // Barra y desglose
+    const bar = $("bar"), rows = $("rows"); bar.innerHTML = ""; rows.innerHTML = "";
+    SEGMENTS.forEach(([k, label, color]) => {
+      const v = r[k]; const pct = r.costo > 0 ? v / r.costo * 100 : 0;
+      const s = document.createElement("span"); s.style.width = pct + "%"; s.style.background = `var(${color})`; s.title = `${label}: ${money(v)}`;
+      bar.appendChild(s);
+      const row = document.createElement("div"); row.className = "row";
+      row.innerHTML = `<span class="sw" style="background:var(${color})"></span><span>${label}</span><span class="v">${money(v)}</span>`;
+      rows.appendChild(row);
+    });
+    const tot = document.createElement("div"); tot.className = "row total";
+    tot.innerHTML = `<span>Costo por pieza</span><span class="v">${money(r.costo)}</span>`; rows.appendChild(tot);
+    const gan = document.createElement("div"); gan.className = "row sum";
+    gan.innerHTML = `<span>Te queda de ganancia por pieza</span><span class="v">${money(r.ganancia)}</span>`; rows.appendChild(gan);
+
+    $("kTotal").textContent = money(r.precio * r.qty);
+    $("kProfit").textContent = money(r.ganancia * r.qty);
+    $("kGram").textContent = num("gramos") > 0 ? money(r.precio / num("gramos")) : "—";
+    $("kHours").textContent = (r.horas * r.qty).toLocaleString("es-MX", { maximumFractionDigits: 1 }) + " h";
+
+    const al = $("alert");
+    if (r.ganancia < 0) { al.hidden = false; al.textContent = "Con este descuento o comisión vendes por debajo del costo. Sube la ganancia o baja el descuento."; }
+    else if (r.costo > 0 && r.ganancia / r.costo < 0.15) { al.hidden = false; al.textContent = "La ganancia real queda por debajo del 15 % del costo."; }
+    else al.hidden = true;
+
+    // Tabla de volumen
+    const qtys = [...new Set([1, ...state.tiers.map(t => t.desde), r.qty])].sort((a, b) => a - b);
+    let html = "<thead><tr><th>Piezas</th><th>Por pieza</th><th>Total</th><th>Ganancia</th></tr></thead><tbody>";
+    qtys.forEach(q => {
+      const x = compute(q);
+      html += `<tr class="${q === r.qty ? "cur" : ""}"><td>${q}</td><td>${money(x.precio)}</td><td>${money(x.precio * q)}</td><td>${money(x.ganancia * q)}</td></tr>`;
+    });
+    $("volTable").innerHTML = html + "</tbody>";
+
+    $("mPrice").textContent = fmt0.format(r.precio);
+    $("mTotal").textContent = fmt0.format(r.precio * r.qty);
+    $("mQtyLbl").textContent = `Pedido (${r.qty} pzas)`;
+
+    $("quoteText").value = quote(r, name);
+    $("quoteText").hidden = true; $("copied").hidden = true;
+  }
+
+  function quote(r, name) {
+    const lines = [
+      `Cotización — ${name}`,
+      `Material: ${state.material}`,
+      `Precio por pieza: ${money(r.precio)}${r.iva ? " (IVA incluido)" : ""}`,
+      `Cantidad: ${r.qty} ${r.qty === 1 ? "pieza" : "piezas"}`,
+      `Total: ${money(r.precio * r.qty)}`
+    ];
+    if (r.desc > 0) lines.splice(3, 0, `Descuento de mayoreo aplicado: ${Math.round(r.desc * 100)} %`);
+    const tiers = state.tiers.filter(t => t.desc > 0).sort((a, b) => a.desde - b.desde);
+    if (tiers.length) lines.push("", "Precios de mayoreo:", ...tiers.map(t => `• Desde ${t.desde} piezas: ${money(compute(t.desde).precio)} c/u`));
+    return lines.join("\n");
+  }
+
+  // ── Copiar
+  $("btnCopy").addEventListener("click", () => {
+    const text = $("quoteText").value;
+    const done = () => { $("copied").hidden = false; };
+    try {
+      navigator.clipboard.writeText(text).then(done).catch(() => fallback());
+    } catch (e) { fallback(); }
+    function fallback() {
+      const ta = $("quoteText"); ta.hidden = false; ta.focus(); ta.select();
+      $("copied").textContent = "Selecciona y copia el texto"; $("copied").hidden = false;
+    }
+  });
+
+  // ── Guardar en este navegador
+  function save() {
+    try {
+      const data = { material: state.material, tiers: state.tiers, iva: $("iva").checked };
+      FIELDS.forEach(f => data[f] = $(f).value);
+      localStorage.setItem(STORE_KEY, JSON.stringify(data));
+    } catch (e) { /* sin almacenamiento disponible */ }
+  }
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY); if (!raw) return;
+      const d = JSON.parse(raw);
+      FIELDS.forEach(f => { if (d[f] !== undefined) $(f).value = d[f]; });
+      $("iva").checked = !!d.iva;
+      if (d.material) state.material = d.material;
+      if (Array.isArray(d.tiers) && d.tiers.length) state.tiers = d.tiers;
+    } catch (e) { /* datos dañados: se usan los de ejemplo */ }
+  }
+  $("btnReset").addEventListener("click", () => {
+    FIELDS.forEach(f => $(f).value = DEFAULTS[f]);
+    $("iva").checked = false; state.material = "PLA"; state.tiers = DEFAULT_TIERS.map(t => ({ ...t }));
+    try { localStorage.removeItem(STORE_KEY); } catch (e) {}
+    paintChips(); renderTiers(); calc();
+  });
+
+  FIELDS.forEach(f => $(f).addEventListener("input", () => { calc(); save(); }));
+  $("redondeo").addEventListener("change", () => { calc(); save(); });
+  $("iva").addEventListener("change", () => { calc(); save(); });
+
+  load(); paintChips(); renderTiers(); calc();
+  window.__cotizador = { compute };
+})();
+</script>
+
+</body>
+</html>
